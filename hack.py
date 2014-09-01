@@ -1,5 +1,5 @@
 import sublime, sublime_plugin
-import subprocess, os.path
+import subprocess, os.path, re
 
 class InsertTextCommand(sublime_plugin.TextCommand):
     def run(self, edit, txt):
@@ -9,8 +9,8 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
     def run(self):
         self.output_view = self.window.get_output_panel("textarea")
         self.window.run_command("hide_panel", {"panel": "output.textarea"})
-        if not self.checkFileType():
-            return
+        if not checkFileType(self.window.active_view()):
+            return 
         self.output_view.set_read_only(False)
         typechecker_output = self.getOutput().decode('utf-8')
         self.output_view.run_command('insert_text', {"txt": typechecker_output})
@@ -19,14 +19,17 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
             self.window.run_command("show_panel", {"panel": "output.textarea"})
 
     def getOutput(self):
-        if not self.checkConfig():
+        if not checkConfig(self.window.active_view()):
             return ".hhconfig not found"
         directory = os.path.dirname(self.window.active_view().file_name())
         if directory == None:
             return "File not Found"
 
         ret = subprocess.Popen(
-            ['hh_client', directory],
+            [
+                'hh_client', directory, 
+                '--from', 'sublime' # doesn't do anything for hh_client yet
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT
             )
@@ -35,16 +38,66 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
             return ""
         return output
 
-    def checkConfig(self):
-        directory = os.path.dirname(self.window.active_view().file_name())
-        return os.path.isfile("%s/.hhconfig" % directory)
-
-    def checkFileType(self):
-        tag = self.window.active_view().substr(sublime.Region(0, 2))
-        return tag == '<?'
-
 
 
 class onSaveListener(sublime_plugin.EventListener):
 	def on_post_save(self, view):
 		view.window().run_command("show_typechecker")
+
+class CompletionsListener(sublime_plugin.EventListener):
+
+    def on_query_completions(self, view, prefix, locations):
+        if not checkFileType(view):
+            return [()] # default
+        if not checkConfig(view):
+            return [('.hhconfig not found', '.hhconfig not found')]
+        directory = os.path.dirname(view.file_name())
+        startregion = sublime.Region(0, locations[0])
+        endregion = sublime.Region(locations[0], view.size());
+        contents = view.substr(startregion)+"AUTO332"+view.substr(endregion)
+        proc = subprocess.Popen(
+                    [
+                        "hh_client", "--auto-complete"
+                    ],
+                    cwd=directory,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT
+                )
+        stdout = proc.communicate(contents.encode('utf-8'))
+        if proc.returncode == 0:
+            results = self.format(stdout)
+            return results
+
+    # hh_client returns a tuple 
+    # = ("newline seperated list", None) for what I see
+    def format(self, input):
+        entries = results = []
+        for entry in input[0].decode('utf-8').split("\n"):
+            if not entry:
+                continue
+            space = entry.find(' ')
+            if entry[0] == '$': # Variable
+                name_end = len(entry) if (space == -1) else space
+                word = entry[1:name_end]
+                results.append((entry, word));
+            elif space < 0: # Class or function
+                results.append((entry, entry))
+            else: # Method, property or constant
+                word = entry[:space]
+                menu = entry[space:]
+                if not not re.search("\(function\(", menu): 
+                    results.append((entry, word))
+                else:
+                    results.append((entry, word))
+        return results   
+
+
+
+def checkConfig(view):
+    path = os.path.dirname(view.file_name())
+    return os.path.isfile("%s/.hhconfig" % path);
+
+def checkFileType(view):
+    tag = view.substr(sublime.Region(0, 2))
+    return tag == '<?'
