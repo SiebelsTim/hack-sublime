@@ -7,6 +7,7 @@ class InsertTextCommand(sublime_plugin.TextCommand):
 
 class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
     def run(self):
+        self.unmarkAll()
         self.output_view = self.window.get_output_panel("textarea")
         self.window.run_command("hide_panel", {"panel": "output.textarea"})
         if not checkFileType(self.window.active_view()):
@@ -16,6 +17,7 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
         self.output_view.run_command('insert_text', {"txt": typechecker_output})
         self.output_view.set_read_only(True)
         if typechecker_output != "":
+            self.markErrorLines(typechecker_output)
             self.window.run_command("show_panel", {"panel": "output.textarea"})
 
     def getOutput(self):
@@ -36,6 +38,42 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
         if ret.returncode == 0: # No Errors
             return ""
         return output
+
+    def markErrorLines(self, output):
+        views = {}
+        regions = {}
+        output_lines = output.split("\n")
+        for oline in output_lines:
+            if not re.search('File', oline):
+                continue # Skip error messages
+            split = oline.split(',')
+            filename = split[0][6:-1]
+            line_number = split[1][6:]
+            view = self.window.find_open_file(filename)
+            if view == None: 
+                # TODO: Sublime doesn't like symlinks
+                view = self.window.open_file(filename)
+            # sublime uses characters rather than linenumbers
+            offset = view.text_point(int(line_number)-1, 0)
+            region = split[2][12:-1].split('-')
+            region = sublime.Region(offset-1+int(region[0]), offset+int(region[1]))
+            views[view.id()] = view
+            if not regions.get(view.id()):
+                regions[view.id()] = []
+            regions[view.id()].append(region)
+
+        for view in views:
+            # for some reason view gets converted to its id in the for
+            self.markError(views[view], regions[view])
+
+    def markError(self, view, regions):
+        view.add_regions(
+                'error', regions, 'invalid', 'circle'
+            )
+
+    def unmarkAll(self):
+        for view in self.window.views():
+            view.erase_regions('error')
 
 
 
