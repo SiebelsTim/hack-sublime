@@ -1,5 +1,5 @@
 import sublime, sublime_plugin
-import subprocess, os.environ, os.pathsep, os.access, os.X_OK, os.path, re
+import subprocess, os, re
 
 class InsertTextCommand(sublime_plugin.TextCommand):
     def run(self, edit, txt):
@@ -19,17 +19,16 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
             self.window.run_command("show_panel", {"panel": "output.textarea"})
 
     def getOutput(self):
-        if not checkConfig(self.window.active_view()):
-            return ".hhconfig not found"
         directory = os.path.dirname(self.window.active_view().file_name())
         if directory == None:
             return "File not Found"
 
         ret = subprocess.Popen(
             [
-                which('hh_client'), directory, 
+                which('hh_client'),
                 '--from', 'sublime' # doesn't do anything for hh_client yet
             ],
+            cwd=directory,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT
             )
@@ -49,8 +48,6 @@ class CompletionsListener(sublime_plugin.EventListener):
     def on_query_completions(self, view, prefix, locations):
         if not checkFileType(view):
             return [()] # default
-        if not checkConfig(view):
-            return [('.hhconfig not found', '.hhconfig not found')]
         directory = os.path.dirname(view.file_name())
         startregion = sublime.Region(0, locations[0])
         endregion = sublime.Region(locations[0], view.size());
@@ -93,14 +90,6 @@ class CompletionsListener(sublime_plugin.EventListener):
         return results   
 
 
-
-def checkConfig(view):
-    for x in view.window().folders():
-        if os.path.isfile("%s/.hhconfig " % x):
-            return True
-
-    path = os.path.dirname(view.file_name())
-    return os.path.isfile("%s/.hhconfig" % path);
 
 def checkFileType(view):
     tag = view.substr(sublime.Region(0, 2))
