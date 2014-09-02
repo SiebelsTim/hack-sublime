@@ -1,5 +1,5 @@
 import sublime, sublime_plugin
-import subprocess, os.path, re
+import subprocess, os.environ, os.pathsep, os.access, os.X_OK, os.path, re
 
 class InsertTextCommand(sublime_plugin.TextCommand):
     def run(self, edit, txt):
@@ -27,7 +27,7 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
 
         ret = subprocess.Popen(
             [
-                'hh_client', directory, 
+                which('hh_client'), directory, 
                 '--from', 'sublime' # doesn't do anything for hh_client yet
             ],
             stdout=subprocess.PIPE,
@@ -57,7 +57,7 @@ class CompletionsListener(sublime_plugin.EventListener):
         contents = view.substr(startregion)+"AUTO332"+view.substr(endregion)
         proc = subprocess.Popen(
                     [
-                        "hh_client", "--auto-complete"
+                        which('hh_client'), "--auto-complete"
                     ],
                     cwd=directory,
                     stdin=subprocess.PIPE,
@@ -95,9 +95,30 @@ class CompletionsListener(sublime_plugin.EventListener):
 
 
 def checkConfig(view):
+    for x in view.window().folders():
+        if os.path.isfile("%s/.hhconfig " % x):
+            return True
+
     path = os.path.dirname(view.file_name())
     return os.path.isfile("%s/.hhconfig" % path);
 
 def checkFileType(view):
     tag = view.substr(sublime.Region(0, 2))
     return tag == '<?'
+
+def which(program):
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            path = path.strip('"')
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+
+    return None
