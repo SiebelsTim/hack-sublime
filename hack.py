@@ -22,18 +22,16 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
 
     def getOutput(self):
         directory = os.path.dirname(self.window.active_view().file_name())
-        if directory == None:
-            return "File not Found"
-
         ret = subprocess.Popen(
-            [
-                which('hh_client'),
-                '--from', 'sublime' # doesn't do anything for hh_client yet
-            ],
-            cwd=directory,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT
-            )
+                  [
+                      which('hh_client'),
+                      '--from', 'sublime'
+                      # ^ doesn't do anything for hh_client yet
+                  ],
+                  cwd=directory,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.STDOUT
+              )
         output = ret.communicate()[0]
         if ret.returncode == 0: # No Errors
             return ""
@@ -119,12 +117,8 @@ class CompletionsListener(sublime_plugin.EventListener):
             elif space < 0: # Class or function
                 results.append((entry, entry))
             else: # Method, property or constant
-                word = entry[:space]
-                menu = entry[space:]
-                if not not re.search("\(function\(", menu): 
-                    results.append((entry, word))
-                else:
-                    results.append((entry, word))
+                word = entry[:space] 
+                results.append((entry, word))
         return results   
 
 
