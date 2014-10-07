@@ -136,10 +136,10 @@ def which(program):
         if is_exe(program):
             return program
     else:
-        for path in os.environ["PATH"].split(os.pathsep):
+        pathenv = os.getenv("PATH") + os.pathsep + "/usr/local/bin/"
+        for path in pathenv.split(os.pathsep):
             path = path.strip('"')
             exe_file = os.path.join(path, program)
             if is_exe(exe_file):
                 return exe_file
-
-    return None
+    raise Exception("hh_client executable not found")
