@@ -30,7 +30,7 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
                   ],
                   cwd=directory,
                   stdout=subprocess.PIPE,
-                  stderr=subprocess.STDOUT
+                  stderr=subprocess.PIPE
               )
         output = ret.communicate()[0]
         if ret.returncode == 0: # No Errors
@@ -95,7 +95,7 @@ class CompletionsListener(sublime_plugin.EventListener):
                     cwd=directory,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT
+                    stderr=subprocess.PIPE
                 )
         stdout = proc.communicate(contents.encode('utf-8'))
         if proc.returncode == 0:
