@@ -17,8 +17,8 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
         self.output_view.run_command('insert_text', {"txt": typechecker_output})
         self.output_view.set_read_only(True)
         if typechecker_output != "":
-            self.markErrorLines(typechecker_output)
             self.window.run_command("show_panel", {"panel": "output.textarea"})
+            self.markErrorLines(typechecker_output)
 
     def getOutput(self):
         directory = os.path.dirname(self.window.active_view().file_name())
@@ -42,7 +42,7 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
         regions = {}
         output_lines = output.split("\n")
         for oline in output_lines:
-            if not re.search('File', oline):
+            if not re.search('^File', oline):
                 continue # Skip error messages
             split = oline.split(',')
             filename = split[0][6:-1]
