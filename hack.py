@@ -50,7 +50,7 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
             view = self.window.find_open_file(filename)
             if view == None: 
                 # TODO: Sublime doesn't like symlinks
-                view = self.window.open_file(filename)
+                continue # file not open, don't highlight it
             # sublime uses characters rather than linenumbers
             offset = view.text_point(int(line_number)-1, 0)
             region = split[2][12:-1].split('-')
