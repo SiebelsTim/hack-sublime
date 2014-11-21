@@ -4,6 +4,7 @@ Installation
 Download the zip-archive and move it into Sublime Text's config folder.
 
 ```bash
+wget https://github.com/SiebelsTim/hack-sublime/raw/master/Hack.sublime-package
 mv Hack.sublime-package ~/.config/sublime-text-3/Installed\ Packages/Hack.sublime-package
 ```
 Change the folder to `sublime-text-2` if you use Sublime Text 2
