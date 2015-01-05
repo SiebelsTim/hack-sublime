@@ -11,7 +11,7 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
         self.output_view = self.window.get_output_panel("textarea")
         self.window.run_command("hide_panel", {"panel": "output.textarea"})
         if not checkFileType(self.window.active_view()):
-            return 
+            return
         self.output_view.set_read_only(False)
         typechecker_output = self.getOutput().decode('utf-8')
         self.output_view.run_command('insert_text', {"txt": typechecker_output})
@@ -21,17 +21,30 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
             self.markErrorLines(typechecker_output)
 
     def getOutput(self):
+        settings = self.window.active_view().settings()
         directory = os.path.dirname(self.window.active_view().file_name())
-        ret = subprocess.Popen(
-                  [
-                      which('hh_client'),
-                      '--from', 'sublime'
-                      # ^ doesn't do anything for hh_client yet
-                  ],
-                  cwd=directory,
-                  stdout=subprocess.PIPE,
-                  stderr=subprocess.PIPE
-              )
+        ssh = settings.get("hack_ssh_enable")
+        address = settings.get("hack_ssh_address")
+        folder = settings.get("hack_ssh_folder")
+        if (ssh and folder != None and address != None):
+            ret = subprocess.Popen(
+                [
+                    "ssh", address, "cd " + folder + "; hh_client"
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+        else:
+            ret = subprocess.Popen(
+                      [
+                          which('hh_client'),
+                          '--from', 'sublime'
+                          # ^ doesn't do anything for hh_client yet
+                      ],
+                      cwd=directory,
+                      stdout=subprocess.PIPE,
+                      stderr=subprocess.PIPE
+                  )
         output = ret.communicate()[0]
         if ret.returncode == 0: # No Errors
             return ""
@@ -48,7 +61,7 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
             filename = split[0][6:-1]
             line_number = split[1][6:]
             view = self.window.find_open_file(filename)
-            if view == None: 
+            if view == None:
                 # TODO: Sublime doesn't like symlinks
                 continue # file not open, don't highlight it
             # sublime uses characters rather than linenumbers
@@ -102,7 +115,7 @@ class CompletionsListener(sublime_plugin.EventListener):
             results = self.format(stdout)
             return results
 
-    # hh_client returns a tuple 
+    # hh_client returns a tuple
     # = ("newline seperated list", None) for what I see
     def format(self, input):
         entries = results = []
@@ -117,9 +130,9 @@ class CompletionsListener(sublime_plugin.EventListener):
             elif space < 0: # Class or function
                 results.append((entry, entry))
             else: # Method, property or constant
-                word = entry[:space] 
+                word = entry[:space]
                 results.append((entry, word))
-        return results   
+        return results
 
 
 
