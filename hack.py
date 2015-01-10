@@ -95,7 +95,9 @@ class onSaveListener(sublime_plugin.EventListener):
 class CompletionsListener(sublime_plugin.EventListener):
 
     def on_query_completions(self, view, prefix, locations):
-        if not checkFileType(view):
+        view.settings()
+        ssh = settings.get("hack_ssh_enable")
+        if ssh or not checkFileType(view):
             return [()] # default
         directory = os.path.dirname(view.file_name())
         startregion = sublime.Region(0, locations[0])
