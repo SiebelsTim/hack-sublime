@@ -53,29 +53,35 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
     def markErrorLines(self, output):
         views = {}
         regions = {}
-        output_lines = output.split("\n")
-        for oline in output_lines:
-            if not re.search('^File', oline):
-                continue # Skip error messages
-            split = oline.split(',')
-            filename = split[0][6:-1]
-            line_number = split[1][6:]
+        errors = output.split("\n")
+        status = ""
+
+        for err in errors:
+            result = re.search('^(.*):(\d*):(\d*),(\d*): (.*)$', err)
+            if result is None:
+                continue
+            filename, line_number, char_start, char_end, err_msg = result.groups()
+            status += line_number + ": " + err_msg + " "
+
+            filename = os.path.basename(filename)
             view = self.window.find_open_file(filename)
-            if view == None:
-                # TODO: Sublime doesn't like symlinks
-                continue # file not open, don't highlight it
-            # sublime uses characters rather than linenumbers
-            offset = view.text_point(int(line_number)-1, 0)
-            region = split[2][12:-1].split('-')
-            region = sublime.Region(offset-1+int(region[0]), offset+int(region[1]))
+            if view is None:
+                continue
+
+            offset = view.text_point(int(line_number) - 1, 0)
+            region = sublime.Region(
+                offset - 1 + int(char_start),
+                offset + int(char_end)
+            )
             views[view.id()] = view
+
             if not regions.get(view.id()):
                 regions[view.id()] = []
             regions[view.id()].append(region)
 
         for view in views:
-            # for some reason view gets converted to its id in the for
             self.markError(views[view], regions[view])
+        self.window.active_view().set_status('hacklang', status)
 
     def markError(self, view, regions):
         view.add_regions(
@@ -85,6 +91,7 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
     def unmarkAll(self):
         for view in self.window.views():
             view.erase_regions('error')
+            view.erase_status('hacklang')
 
 
 
