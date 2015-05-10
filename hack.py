@@ -91,6 +91,7 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
     def unmarkAll(self):
         for view in self.window.views():
             view.erase_regions('error')
+            view.erase_status('hacklang')
 
 
 
