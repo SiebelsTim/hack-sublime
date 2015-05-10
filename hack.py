@@ -29,7 +29,7 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
         if (ssh and folder != None and address != None):
             ret = subprocess.Popen(
                 [
-                    "ssh", address, "cd " + folder + "; hh_client"
+                    "ssh", address, "cd " + folder + "; hh_client --from sublime"
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE
