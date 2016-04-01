@@ -39,7 +39,7 @@ Preferences -> Settings - User
 ```
 {
   "hack_ssh_folder": "/home/tim/project/",
-  "hack_ssh_adress": "tim@10.0.0.1",
+  "hack_ssh_address": "tim@10.0.0.1",
   "hack_ssh_enable": true
 }
 ```

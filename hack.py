@@ -1,54 +1,71 @@
 import sublime, sublime_plugin
-import subprocess, os, re
+import subprocess, os, re, threading
 
-class InsertTextCommand(sublime_plugin.TextCommand):
-    def run(self, edit, txt):
-        self.view.insert(edit, self.view.size(), txt);
+def insertText(view, message):
+    view.set_read_only(False)
+    view.run_command('insert_text', {"txt": message})
+    view.set_read_only(True)
 
-class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
-    def run(self):
-        self.unmarkAll()
+class HackClient(threading.Thread):
+    def __init__(self, window):
+        super(HackClient, self).__init__()
+
+        self.window = window
         self.output_view = self.window.get_output_panel("textarea")
-        self.window.run_command("hide_panel", {"panel": "output.textarea"})
-        if not checkFileType(self.window.active_view()):
-            return
-        self.output_view.set_read_only(False)
-        typechecker_output = self.getOutput().decode('utf-8')
-        self.output_view.run_command('insert_text', {"txt": typechecker_output})
-        self.output_view.set_read_only(True)
-        if typechecker_output != "":
-            self.window.run_command("show_panel", {"panel": "output.textarea"})
-            self.markErrorLines(typechecker_output)
+        self.settings = self.window.active_view().settings()
+        self.ssh_enable = self.settings.get("hack_ssh_enable")
+        self.ssh_address = self.settings.get("hack_ssh_address")
+        self.ssh_folder = self.settings.get("hack_ssh_folder")
+        self.client = None
 
-    def getOutput(self):
-        settings = self.window.active_view().settings()
-        directory = os.path.dirname(self.window.active_view().file_name())
-        ssh = settings.get("hack_ssh_enable")
-        address = settings.get("hack_ssh_address")
-        folder = settings.get("hack_ssh_folder")
-        if (ssh and folder != None and address != None):
-            ret = subprocess.Popen(
-                [
-                    "ssh", address, "cd " + folder + "; hh_client"
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
+        self.window.run_command("show_panel", {"panel": "output.textarea"})
+
+    def run(self):
+        self.client = self.startClient()
+
+        t = threading.Timer(1.0, insertText, (self.output_view, "Waiting for hh_client to initialise...\n"))
+        t.start()
+
+        self.client.wait()
+        t.cancel()
+        self.updateOutput()
+
+    def useSSH(self):
+        return self.ssh_enable and self.ssh_folder != None and self.ssh_address != None
+
+    def startClient(self):
+        if self.useSSH():
+            return self.startSSHClient()
         else:
-            ret = subprocess.Popen(
-                      [
-                          which('hh_client'),
-                          '--from', 'sublime'
-                          # ^ doesn't do anything for hh_client yet
-                      ],
-                      cwd=directory,
-                      stdout=subprocess.PIPE,
-                      stderr=subprocess.PIPE
-                  )
-        output = ret.communicate()[0]
-        if ret.returncode == 0: # No Errors
-            return ""
-        return output
+            return self.startLocalClient()
+
+    def startSSHClient(self):
+        return subprocess.Popen(
+            [
+                "ssh", self.ssh_address, "cd " + self.ssh_folder, "; hh_client --from sublime"
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+
+    def startLocalClient(self):
+        directory = os.path.dirname(self.window.active_view().file_name())
+        return subprocess.Popen(
+            [
+                which('hh_client'), '--from', 'sublime'
+            ],
+            cwd=directory,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+
+    def updateOutput(self):
+        output = self.client.stdout.read().decode('utf-8')
+        insertText(self.output_view, output)
+
+        self.unmarkAll()
+        if len(output) != 0:
+            self.markErrorLines(output)
 
     def markErrorLines(self, output):
         views = {}
@@ -60,7 +77,10 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
             split = oline.split(',')
             filename = split[0][6:-1]
             line_number = split[1][6:]
-            view = self.window.find_open_file(filename)
+            if self.useSSH():
+                view = self.findViewForFile(filename)
+            else:
+                view = self.window.find_open_file(filename)
             if view == None:
                 # TODO: Sublime doesn't like symlinks
                 continue # file not open, don't highlight it
@@ -77,6 +97,20 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
             # for some reason view gets converted to its id in the for
             self.markError(views[view], regions[view])
 
+    def findViewForFile(self, file):
+        settings = self.window.active_view().settings()
+        ssh_folder = settings.get("hack_ssh_folder")
+        relative_file = file
+
+        if file.startswith(ssh_folder):
+            relative_file = file[len(ssh_folder):]
+
+        for view in self.window.views():
+            if view.file_name() and view.file_name().endswith(relative_file):
+                return view
+
+        return None
+
     def markError(self, view, regions):
         view.add_regions(
                 'error', regions, 'invalid', 'circle'
@@ -86,7 +120,17 @@ class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
         for view in self.window.views():
             view.erase_regions('error')
 
+class InsertTextCommand(sublime_plugin.TextCommand):
+    def run(self, edit, txt):
+        self.view.insert(edit, self.view.size(), txt);
 
+class ShowTypecheckerCommand(sublime_plugin.WindowCommand):
+    def run(self):
+        if not checkFileType(self.window.active_view()):
+            return
+
+        hack_client = HackClient(self.window)
+        hack_client.start()
 
 class onSaveListener(sublime_plugin.EventListener):
 	def on_post_save(self, view):
@@ -95,7 +139,7 @@ class onSaveListener(sublime_plugin.EventListener):
 class CompletionsListener(sublime_plugin.EventListener):
 
     def on_query_completions(self, view, prefix, locations):
-        view.settings()
+        settings = view.settings()
         ssh = settings.get("hack_ssh_enable")
         if ssh or not checkFileType(view):
             return [()] # default
