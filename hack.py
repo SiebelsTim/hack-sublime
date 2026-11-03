@@ -1,6 +1,12 @@
 import sublime, sublime_plugin
 import subprocess, os, re, threading
 
+class ExecutableNotFound(Exception):
+    pass
+
+def showWarning(message):
+    sublime.status_message("Hacklang: " + message)
+
 def insertText(view, message):
     view.set_read_only(False)
     view.run_command('insert_text', {"txt": message})
@@ -18,10 +24,14 @@ class HackClient(threading.Thread):
         self.ssh_folder = self.settings.get("hack_ssh_folder")
         self.client = None
 
-        self.window.run_command("show_panel", {"panel": "output.textarea"})
-
     def run(self):
-        self.client = self.startClient()
+        try:
+            self.client = self.startClient()
+        except ExecutableNotFound as e:
+            showWarning(str(e))
+            return
+
+        sublime.set_timeout(lambda: self.window.run_command("show_panel", {"panel": "output.textarea"}), 0)
 
         t = threading.Timer(1.0, insertText, (self.output_view, "Waiting for hh_client to initialise...\n"))
         t.start()
@@ -147,9 +157,14 @@ class CompletionsListener(sublime_plugin.EventListener):
         startregion = sublime.Region(0, locations[0])
         endregion = sublime.Region(locations[0], view.size());
         contents = view.substr(startregion)+"AUTO332"+view.substr(endregion)
+        try:
+            hh_client = which('hh_client')
+        except ExecutableNotFound as e:
+            showWarning(str(e))
+            return [()] # default
         proc = subprocess.Popen(
                     [
-                        which('hh_client'), "--auto-complete"
+                        hh_client, "--auto-complete"
                     ],
                     cwd=directory,
                     stdin=subprocess.PIPE,
@@ -201,4 +216,4 @@ def which(program):
             exe_file = os.path.join(path, program)
             if is_exe(exe_file):
                 return exe_file
-    raise Exception("hh_client executable not found")
+    raise ExecutableNotFound(program + " executable not found")
